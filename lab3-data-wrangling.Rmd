@@ -35,10 +35,11 @@ As a first step, we will setup the package and data.
 **Question 1.1: load package tidyverse and read data "data/state_dex_cleaned.csv", assign the object name "state_dex".**
 
 ```{r}
-install.packages("tidyverse")
+
 library(tidyverse)
-install.packages("gapminder")
 library(gapminder)
+library(lubridate)
+library(dplyr)
 
 ```
 
@@ -52,8 +53,12 @@ glimpse(state_dex)
 ```{r}
 nrow(state_dex)
 ```
+4590, each row is an individual neighborhood.
+
+
 
 **Question 1.3. What are the possible bias of measuring device exposure by restricting venues to commercial locations? Do you think DEX might overestimate or underestimate the exposure?**
+Potentially over-represent higher income people, and people who were more active in the pandemic. I think because of this the data might overestimate exposure. 
 
 
 # 2. Modify data frame
@@ -63,7 +68,7 @@ This section introduces key `dplyr` verbs to modify a data frame.
 **Pipe** The core package in `tidyverse` to manipulate data is `dplyr`. It is loaded in R's memory when we loaded `tidyverse` earlier. `dplyr` uses the `magrittr` forward pipe operator, usually called simply a **pipe**. We write pipes like `%>%` (`Ctrl+Shift+M`, or `CMD+Shift+M` on Mac). Pipes take the object on the *left* and apply the function on the *right*: `x %>% f(y) = f(x,y)`. An example is shown below:
 
 ```{r}
-state_dex %>% 
+PA_dex <- state_dex %>% 
   filter(state == "PA") %>% # create a subset of data
   head(5)
 ```
@@ -86,7 +91,7 @@ state_dex %>%
 **filter()** choose rows (observations) by some characteristics
 
 ```{r}
-state_dex %>% 
+date_dex <- state_dex %>% 
   filter(date>"2020-03-01") %>% 
   head(5)
 ```
@@ -95,21 +100,21 @@ state_dex %>%
 **select()** choose columns (variables) by name
 
 ```{r}
-state_dex %>% 
+select_dex <- state_dex %>% 
   select(state,date,dex) %>% 
   head(5)
 ```
 We can also drop only specific columns with select() using `-` signs. 
 
 ```{r}
-state_dex %>% 
+drop_dex <- state_dex %>% 
   select(-num_devices_income_1,-num_devices_income_2)
 ```
 
 **Question 2.2. Use select to show only the state, date and dex variables.**
 
 ```{r}
-state_dex %>% 
+filtered_dex <- state_dex %>% 
   select(state, date, dex)
 
 ```
@@ -117,12 +122,12 @@ state_dex %>%
 **Logical operators** 
 
 ```{r}
-state_dex %>% 
+ak_dex <- state_dex %>% 
   filter(state=="AK")
 ```
 What does `state=="AK` actually do?
 ```{r}
-head(state_dex$state=="AK",100)
+head(state_dex$state=="AK", 100)
 ```
 It returns a vector of `TRUE` or `FALSE` values. When used for subset, elements for which a `TRUE` is given are returned, while those corresponding to `FALSE` are dropped. We used `==` for testing "equals". 
 
@@ -149,14 +154,17 @@ TX_dex <- state_dex %>%
 **Question 2.4. Create a set of states containing Washington, Oregon and California. Find observations in state_dex that only belong to this set of states. How many rows do you get?**
 
 ```{r}
-state_dex %>% 
+WA_OR_CA <- state_dex %>% 
   filter(state %in% c("WA", "OR", "CA"))
+
+nrow(WA_OR_CA)
 ```
+270 rows.
 
 **arrange** put data in order by one or more variables. 
 
 ```{r}
-state_dex %>% 
+arranged_dex <- state_dex %>% 
   arrange(state, desc(dex))
 ```
 
@@ -166,8 +174,19 @@ The data are sorted by ascending `state` and descending `dex`.
 (Check hints if you have troubles)
 
 ```{r}
+TX_Feb <- TX_dex %>% 
+  filter(str_detect(date, "2020-02")) %>% 
+    arrange(desc(dex)) %>% 
+      slice_head(n = 10)
+      
+TX_Apr <- TX_dex %>% 
+  filter(str_detect(date, "2020-04")) %>% 
+    arrange(desc(dex)) %>% 
+      slice_head(n = 10)
 
 ```
+
+Exppsure seems to be much higher in Febuary than in April. 
 
 # 3. Summarize data frames
 
@@ -181,7 +200,7 @@ The data are sorted by ascending `state` and descending `dex`.
 You can use any function in summarize() that aggregates *multiple values* into to a *single value* (like sd(), mean(), or max()).
 
 ```{r}
-state_dex %>% 
+sum_dex <- state_dex %>% 
   filter(date<"2020-03-01") %>% 
   summarize(n_obs = n(),
             mean_dex = mean(dex),
@@ -191,7 +210,10 @@ state_dex %>%
 **Question 3.1. Calculate the standard deviation of dex in Pennsylvania.**
 
 ```{r}
-
+sd_dex <- state_dex %>% 
+  filter(state == "PA") %>% 
+  summarize(n_obs = n(),
+            sd_dex = sd(dex))
 ```
 
 **group_by** the special function `group_by()` changes how functions operate on the data, most importantly `summarize()`. 
@@ -200,7 +222,7 @@ Functions after `group_by` are computed *within* each group as defined by variab
 
 
 ```{r}
-state_dex %>% 
+group_dex <- state_dex %>% 
   group_by(state) %>% 
   summarize(mean_dex=mean(dex))
 ```
@@ -209,32 +231,50 @@ state_dex %>%
 (Check hints if you have troubles)
 
 ```{r}
-
+diff_state_dex <- state_dex %>% 
+  filter(date == "2020-03-15") %>% 
+    group_by(state) %>% 
+      summarize(dex_diff = dex_income_4 - dex_income_1)
+      
 ```
 
 **Question 3.3. On April 1, 2020, what is the average dex number of the following states: MA, NY, PA?**
 
 ```{r}
-
+# state_dex %>% 
+#   filter(date == "2020-04-01") %>% 
+#     group_by(state) %>% 
+#       filter(state %in% c("MA", "NY", "PA")) %>% 
+#         summarize(mean_dex = mean(dex))
+#           
 ```
 **Question 3.4. In March, for all states except for Alaska and Hawaii, what is the lowest dex? Which date and state does it associate with?**
 
 ```{r}
-
+cont_dex <- state_dex %>% 
+  filter(str_detect(date, "2020-03")) %>% 
+    group_by(state) %>% 
+      filter(state != "AK",state != "HI") %>% 
+        summarize(min_dex = min(dex), day = which.min(dex)) %>% 
+          arrange(min_dex)
 ```
+7.25, in Vermont on March 29th.
+
 
 # 4. Create new variables
 
 **mutate** you can add new columns to a data frame using `mutate()`. 
 
 ```{r}
-state_dex %>% 
+mut_dex <- state_dex %>% 
   filter(state=="DC") %>% 
   mutate(devices_thousand=num_devices/1000,
          mean_dex = mean(dex))
 ```
 
 **Question 4.1. Take a look at the above code. What is the difference between using `summarize` and `mutate` to calculate group mean?**
+
+It's created as a column, and added to the original dataframe
 
 **ifelse()** A common function used in `mutate()` (and in general R programming) is ifelse(). It returns a vector of values depending on a logical test. For example:
 
@@ -244,7 +284,7 @@ ifelse(example>0, "Positive","Not positive")
 ```
 
 ```{r}
-state_dex %>% 
+dist_dex <- state_dex %>% 
   mutate(full_state_name = 
            ifelse(state=="AK","Alaska",
                   as.character(state))) %>% 
@@ -258,12 +298,34 @@ state_dex %>%
 (Check hints if you have troubles)
 
 ```{r}
+state_month_dex <- state_dex %>% 
+  mutate(month = month(date)) %>%
+  group_by(month, state) %>% 
+  summarize(month = month, state = state, mean_dex = mean(dex)) %>% 
+  distinct(mean_dex)
+      
+state_month_dex
 
+
+
+
+
+  
 ```
 
 **Question 4.3. Which states have the highest mean dex in February, March and April respectively?**
 ```{r}
+state_month_dex %>% 
+  filter(month == 2) %>% 
+  arrange(desc(mean_dex))
+  
+state_month_dex %>% 
+  filter(month == 3) %>% 
+  arrange(desc(mean_dex))
 
+state_month_dex %>% 
+  filter(month == 4) %>% 
+  arrange(desc(mean_dex))
 ```
 
 # 5. Basics of data visualization
@@ -274,7 +336,7 @@ We'll start by plotting a single variable, using bar charts and histograms. To d
 
 **Question 5.1. Install and load the `ggplot2` package.**
 ```{r}
-
+library(ggplot2)
 ```
 
 ## Histograms
@@ -284,16 +346,36 @@ What's the distribution of dex of Washington state? We can see this using a hist
 ```{r}
 state_dex %>%
   filter(state=="WA") %>% # filter for state WA
-  ggplot(aes(x = dex)) + # start a plot and set the aesthetics with the x axis dex
+  ggplot(aes(x = dex)) + # start a plot and set th e aesthetics with the x axis dex
   geom_histogram() # make a histogram
 ```
 
 **Question 5.2: Make a histogram of dex of a state you are interested in. How is the dex distributed differently in February, March and April? Do you think histogram is a good way of plotting changes with time?**
 
 ```{r}
+state_dex %>%
+  mutate(month = month(date)) %>%
+  filter(state=="CA") %>%
+  filter(month == 2) %>%  
+  ggplot(aes(x = dex)) + # start a plot and set th e aesthetics with the x axis dex
+  geom_histogram() # make a histogram
 
+state_dex %>%
+  mutate(month = month(date)) %>%
+  filter(state=="CA") %>%
+  filter(month == 3) %>%  
+  ggplot(aes(x = dex)) + # start a plot and set th e aesthetics with the x axis dex
+  geom_histogram() # make a histogram
+
+state_dex %>%
+  mutate(month = month(date)) %>%
+  filter(state=="CA") %>%
+  filter(month == 4) %>%  
+  ggplot(aes(x = dex)) + # start a plot and set th e aesthetics with the x axis dex
+  geom_histogram() # make a histogram
 ```
-
+Dex dramatically decreases in March and April.
+I don't think histograms are very good for changes over time, as there cannot be a time axis.
 
 ## Bar charts
 
@@ -319,6 +401,24 @@ state_dex %>% # take state_dex data
 **Question 5.3. Make a bar chart comparing the count of days of which dex is higher than 60 by states of your choice. Is there a difference if you compare dex of the poorest neighborhood and of the richest neighborhood? Why do you think is the difference?**
 
 ```{r}
+state_dex %>% # take state_dex data
+  filter(state%in%(c("CA", "WV", "WA")) & dex > 60) %>% 
+  ggplot(aes(x=state)) + # start a plot and set the aesthetics with the x axis the selected states
+  geom_bar() # make a bar chart +
+  labs(title = "Number of days with DEX higher than 60 by selected states")
+  
+  
+state_dex %>% # take state_dex data
+  filter(state%in%(c("CA", "WV", "WA")) & dex_income_4 > 60) %>% 
+  ggplot(aes(x=state)) + # start a plot and set the aesthetics with the x axis the selected states
+  geom_bar() # make a bar chart +
+  labs(title = "Number of days with DEX higher than 60 by selected states")
+  
+state_dex %>% # take state_dex data
+  filter(state%in%(c("CA", "WV", "WA")) & dex_income_1 > 60) %>% 
+  ggplot(aes(x=state)) + # start a plot and set the aesthetics with the x axis the selected states
+  geom_bar() # make a bar chart +
+  labs(title = "Number of days with DEX higher than 60 by selected states")
 
 ```
 
@@ -332,17 +432,9 @@ state_dex %>%
   filter(state=="WA") %>% # filter for state WA
   ggplot(aes(x = dex)) + # start a plot and set the aesthetics with the x axis dex
   geom_histogram() + 
-  theme_minimal() +
+  theme_void() +
   labs(title = "Distribution of dex",
        x = "dex")
-# for even more fun themes:
-# install.packages("ggthemes")
-# library(ggthemes)
-# state_dex %>%
-#   filter(state=="WA) %>% 
-#   ggplot(aes(x = dex)) + 
-#   geom_histogram() +
-#   theme_wsj()
 ```
 
 
